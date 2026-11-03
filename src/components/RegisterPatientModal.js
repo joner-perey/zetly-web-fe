@@ -26,10 +26,10 @@ import ContentCopyRoundedIcon from '@mui/icons-material/ContentCopyRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import ImageRoundedIcon from '@mui/icons-material/ImageRounded';
 import AttachEmailRoundedIcon from '@mui/icons-material/AttachEmailRounded';
+import MarkEmailReadRoundedIcon from '@mui/icons-material/MarkEmailReadRounded';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import SmartphoneRoundedIcon from '@mui/icons-material/SmartphoneRounded';
-import OpenInNewRoundedIcon from '@mui/icons-material/OpenInNewRounded';
-import { createOutlookDraft, isOutlookConfigured } from '../services/OutlookService';
+import { sendQrEmail, registerClientWithQr } from '../services/onboardingService';
 
 const insuranceProviders = [
   'AIA Singapore',
@@ -64,9 +64,10 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
   const [toastMessage, setToastMessage] = useState('');
   const [toastSeverity, setToastSeverity] = useState('success');
 
-  // Draft in Outlook state
-  const [draftingOutlook, setDraftingOutlook] = useState(false);
-  const [draftWebLink, setDraftWebLink] = useState(null);
+  // Direct SMTP Email sending state
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [registeredClientId, setRegisteredClientId] = useState(null);
 
   const showToast = (message, severity = 'success') => {
     setToastMessage(message);
@@ -74,17 +75,48 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
     setToastOpen(true);
   };
 
-  // Handle Generate QR
-  const handleGenerateQR = (e) => {
+  // Handle Generate QR & Register Patient
+  const handleGenerateQR = async (e) => {
     e.preventDefault();
     if (!fullName.trim()) return;
 
-    const generatedToken = `inv_${Math.random().toString(36).substring(2, 12)}_${Date.now().toString(36)}`;
-    const url = `https://app.zetly.health/onboard?token=${generatedToken}&client=${encodeURIComponent(clientCode)}`;
+    let targetUrl = '';
+    let clientId = null;
 
-    setOnboardUrl(url);
+    try {
+      // Call Laravel backend to register patient
+      const res = await registerClientWithQr({
+        full_name: fullName.trim(),
+        client_code: clientCode.trim(),
+        email: patientEmail.trim() || null,
+        date_of_birth: dob || null,
+        gender: gender || null,
+        insurance_provider: insurance || null,
+        insurance_id: policyNumber || null,
+        plan_type: planType || null,
+        contact_number: contactNumber || null,
+        cashless_eligible: cashless,
+      });
+
+      if (res?.onboard_url) {
+        targetUrl = res.onboard_url;
+      }
+      if (res?.client?.id) {
+        clientId = res.client.id;
+        setRegisteredClientId(clientId);
+      }
+    } catch (err) {
+      console.warn('Backend registration notice (continuing with client QR):', err.message);
+    }
+
+    if (!targetUrl) {
+      const generatedToken = `inv_${Math.random().toString(36).substring(2, 12)}_${Date.now().toString(36)}`;
+      targetUrl = `https://app.zetly.health/onboard?token=${generatedToken}&client=${encodeURIComponent(clientCode)}`;
+    }
+
+    setOnboardUrl(targetUrl);
     setPatientStatus('pending_activation');
-    setDraftWebLink(null);
+    setEmailSent(false);
     setStep(2);
 
     if (onPatientRegistered) {
@@ -172,82 +204,38 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
     });
   };
 
-  // Build professional HTML email body (with inline CID QR image)
-  const buildEmailHtml = () => `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
-body { font-family: Segoe UI, Arial, sans-serif; color: #0f172a; line-height: 1.6; margin: 0; padding: 20px; background-color: #f8fafc; }
-.card { max-width: 580px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 8px; background-color: #ffffff; }
-.header { font-size: 18px; font-weight: bold; color: #0f766e; margin-bottom: 14px; }
-.details { background-color: #f8fafc; border-radius: 6px; padding: 14px 18px; margin: 16px 0; border: 1px solid #e2e8f0; }
-.details li { margin-bottom: 6px; list-style: none; }
-.qr-box { text-align: center; margin: 24px 0; padding: 18px; background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; }
-.btn { display: inline-block; background-color: #0f766e; color: #ffffff !important; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold; margin-top: 14px; }
-.footer { margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b; }
-</style>
-</head>
-<body>
-<div class="card">
-  <div class="header">Welcome to Zetly Cashless Healthcare</div>
-  <p>Dear <strong>${fullName || 'Patient'}</strong>,</p>
-  <p>Your cashless clinic privileges have been pre-registered by your healthcare administration.</p>
-  <div class="details">
-    <ul style="padding-left: 0; margin: 0;">
-      <li><strong>Zetly Member ID:</strong> ${clientCode}</li>
-      <li><strong>Insurance Provider:</strong> ${insurance}</li>
-      <li><strong>Policy / Certificate:</strong> ${policyNumber}</li>
-      <li><strong>Cashless Clearance:</strong> ${cashless ? 'Eligible' : 'Standard'}</li>
-    </ul>
-  </div>
-  <div class="qr-box">
-    <p style="font-weight: bold; margin-bottom: 12px; color: #0f172a; font-size: 15px;">Scan with Zetly App to Activate Account:</p>
-    <img src="cid:zetly_qr_image" style="width: 260px; height: auto; border-radius: 8px;" alt="Zetly QR Code" /><br/>
-    <p style="font-size: 13px; color: #64748b; margin-top: 12px;">Or click the button below to activate online:</p>
-    <a href="${onboardUrl}" class="btn">Activate Account Online</a>
-  </div>
-  <p>Once set up, your digital member pass and cashless clinic intake will be instantly active.</p>
-  <div class="footer">
-    Best regards,<br/>
-    <strong>Claims &amp; Operations Team</strong><br/>
-    Zetly Healthcare &bull; <a href="https://app.zetly.health">app.zetly.health</a>
-  </div>
-</div>
-</body>
-</html>`;
-
-  // Draft Email via Microsoft Graph API (creates draft in admin's Outlook Drafts folder)
-  const handleDraftInOutlook = () => {
-    if (!isOutlookConfigured()) {
-      showToast('Azure Client ID not configured. Add REACT_APP_AZURE_CLIENT_ID to .env.local', 'error');
+  // Send QR Email directly via Laravel Backend + SMTP (No Microsoft Graph API)
+  const handleSendEmail = () => {
+    if (!patientEmail || !patientEmail.trim()) {
+      showToast('Please enter the patient’s email address.', 'warning');
       return;
     }
 
     generateQrCardCanvas(async (canvas) => {
-      setDraftingOutlook(true);
+      setSendingEmail(true);
       try {
-        // Extract raw base64 from the PNG data URL (Graph API needs raw base64, no prefix)
         const pngDataUrl = canvas.toDataURL('image/png');
-        const base64Image = pngDataUrl.replace(/^data:image\/png;base64,/, '');
 
-        const attachmentName = `Zetly_QR_${(clientCode || 'member').replace(/[^a-zA-Z0-9]/g, '_')}.png`;
-
-        const result = await createOutlookDraft({
-          toEmail: patientEmail,
-          subject: `Welcome to Zetly - Complete your account setup (${fullName || 'Patient'})`,
-          htmlBody: buildEmailHtml(),
-          base64Image,
-          attachmentName,
+        await sendQrEmail({
+          email: patientEmail.trim(),
+          qrCodeBase64: pngDataUrl,
+          clientId: registeredClientId,
+          clientCode: clientCode,
+          patientName: fullName,
+          insurance: insurance,
+          policyNumber: policyNumber,
+          planType: planType,
+          cashless: cashless,
+          onboardUrl: onboardUrl,
         });
 
-        setDraftWebLink(result.webLink);
-        showToast('Draft created in your Outlook Drafts folder! Click "Open Draft" to review and send.');
+        setEmailSent(true);
+        showToast(`QR Code email sent successfully to ${patientEmail} via SMTP!`, 'success');
       } catch (err) {
-        console.error('Outlook draft error:', err);
-        showToast(`Failed to create draft: ${err.message}`, 'error');
+        console.error('SMTP email sending error:', err);
+        showToast(`Failed to send email: ${err.message}`, 'error');
       } finally {
-        setDraftingOutlook(false);
+        setSendingEmail(false);
       }
     });
   };
@@ -265,7 +253,8 @@ body { font-family: Segoe UI, Arial, sans-serif; color: #0f172a; line-height: 1.
     setPatientEmail('');
     setClientCode(`ZT-${Math.floor(10500 + Math.random() * 400)}`);
     setPatientStatus('pending_activation');
-    setDraftWebLink(null);
+    setEmailSent(false);
+    setRegisteredClientId(null);
     onClose();
   };
 
@@ -594,6 +583,31 @@ body { font-family: Segoe UI, Arial, sans-serif; color: #0f172a; line-height: 1.
                 </Button>
               </Paper>
 
+              {/* Recipient Email Confirmation & Quick Edit */}
+              <Box sx={{ width: '100%', mb: 2 }}>
+                <TextField
+                  label="Patient Recipient Email"
+                  placeholder="e.g. patient@example.com"
+                  type="email"
+                  size="small"
+                  fullWidth
+                  value={patientEmail}
+                  onChange={(e) => setPatientEmail(e.target.value)}
+                  helperText="Recipient will receive the welcome instructions with the QR code attached via SMTP."
+                />
+              </Box>
+
+              {/* Email Sent Status Banner */}
+              {emailSent && (
+                <Alert
+                  severity="success"
+                  icon={<MarkEmailReadRoundedIcon />}
+                  sx={{ width: '100%', mb: 2, borderRadius: 2 }}
+                >
+                  Email sent to <strong>{patientEmail}</strong> via SMTP with attached QR!
+                </Alert>
+              )}
+
               {/* Action Buttons */}
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, width: '100%' }}>
                 <Box sx={{ display: 'flex', gap: 1.5, width: '100%' }}>
@@ -607,7 +621,7 @@ body { font-family: Segoe UI, Arial, sans-serif; color: #0f172a; line-height: 1.
                       textTransform: 'none',
                       borderRadius: 2,
                       fontWeight: 600,
-                      py: 1,
+                      py: 1.1,
                       borderColor: '#cbd5e1',
                       color: '#334155',
                       '&:hover': {
@@ -619,52 +633,39 @@ body { font-family: Segoe UI, Arial, sans-serif; color: #0f172a; line-height: 1.
                     Save as Image
                   </Button>
 
-                  {/* Draft in Outlook (Graph API) */}
+                  {/* Send QR Email via Laravel SMTP */}
                   <Button
                     fullWidth
                     variant="contained"
                     startIcon={
-                      draftingOutlook
-                        ? <CircularProgress size={16} sx={{ color: '#fff' }} />
-                        : <AttachEmailRoundedIcon />
+                      sendingEmail ? (
+                        <CircularProgress size={16} sx={{ color: '#fff' }} />
+                      ) : emailSent ? (
+                        <MarkEmailReadRoundedIcon />
+                      ) : (
+                        <AttachEmailRoundedIcon />
+                      )
                     }
-                    onClick={handleDraftInOutlook}
-                    disabled={draftingOutlook}
+                    onClick={handleSendEmail}
+                    disabled={sendingEmail}
                     sx={{
-                      bgcolor: '#0078d4',
-                      '&:hover': { bgcolor: '#106ebe' },
-                      '&.Mui-disabled': { bgcolor: '#90bce8', color: '#fff' },
+                      bgcolor: emailSent ? '#059669' : '#0f766e',
+                      '&:hover': { bgcolor: emailSent ? '#047857' : '#0d5f58' },
+                      '&.Mui-disabled': { bgcolor: '#99f6e4', color: '#0f766e' },
                       textTransform: 'none',
                       borderRadius: 2,
                       fontWeight: 600,
-                      py: 1,
-                      boxShadow: '0 1px 2px rgba(0, 120, 212, 0.25)',
+                      py: 1.1,
+                      boxShadow: '0 1px 2px rgba(15, 118, 110, 0.25)',
                     }}
                   >
-                    {draftingOutlook ? 'Creating Draft...' : 'Draft in Outlook'}
+                    {sendingEmail
+                      ? 'Sending via SMTP...'
+                      : emailSent
+                      ? 'Resend QR Email'
+                      : 'Send QR via Email'}
                   </Button>
                 </Box>
-
-                {/* Open Draft button — appears after successful draft creation */}
-                {draftWebLink && (
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    startIcon={<OpenInNewRoundedIcon />}
-                    onClick={() => window.open(draftWebLink, '_blank', 'noopener,noreferrer')}
-                    sx={{
-                      textTransform: 'none',
-                      borderRadius: 2,
-                      fontWeight: 600,
-                      py: 0.75,
-                      borderColor: '#0078d4',
-                      color: '#0078d4',
-                      '&:hover': { bgcolor: '#eff6ff', borderColor: '#106ebe' },
-                    }}
-                  >
-                    Open Draft in Outlook Web
-                  </Button>
-                )}
 
                 <Typography
                   variant="caption"
@@ -675,9 +676,7 @@ body { font-family: Segoe UI, Arial, sans-serif; color: #0f172a; line-height: 1.
                     px: 1,
                   }}
                 >
-                  {draftWebLink
-                    ? 'Draft saved with QR attached \u2014 click \u201cOpen Draft\u201d to review and send.'
-                    : '\u201cDraft in Outlook\u201d signs in with Microsoft and saves a ready-to-send draft with the QR image attached in your Outlook Drafts folder.'}
+                  Directly sends the welcome email with the attached QR code to the patient via Laravel SMTP (no Microsoft login required).
                 </Typography>
 
                 {patientStatus !== 'activated' ? (
