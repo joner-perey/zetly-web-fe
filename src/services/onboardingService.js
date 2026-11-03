@@ -121,3 +121,96 @@ export async function registerClientWithQr(clientData, token) {
 
   return data;
 }
+
+/**
+ * Check whether a client_code is already registered in the backend database.
+ *
+ * @param {string} clientCode
+ * @param {string} [token]
+ * @returns {Promise<{exists: boolean, available: boolean, message: string, client?: any}>}
+ */
+export async function checkClientCodeExists(clientCode, token) {
+  if (!clientCode || !clientCode.trim()) {
+    return { exists: false, available: true, message: 'Client code is required.' };
+  }
+
+  const authToken = token || localStorage.getItem('zetly-api-token');
+  const headers = {
+    'Accept': 'application/json',
+  };
+
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`;
+  }
+
+  const endpoint = authToken
+    ? `${API_BASE_URL}/clients/check-code?client_code=${encodeURIComponent(clientCode.trim())}`
+    : `${API_BASE_URL}/dev/clients/check-code?client_code=${encodeURIComponent(clientCode.trim())}`;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers,
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) {
+      return data;
+    }
+    return {
+      exists: false,
+      available: true,
+      message: data.message || 'Unable to check code.',
+    };
+  } catch (err) {
+    console.warn('checkClientCodeExists request failed:', err.message);
+    return { exists: false, available: true, message: err.message };
+  }
+}
+
+
+/**
+ * Check whether a patient email is already registered in the backend database.
+ *
+ * @param {string} email
+ * @param {string} [token]
+ * @returns {Promise<{exists: boolean, available: boolean, message: string, client?: any}>}
+ */
+export async function checkClientEmailExists(email, token) {
+  if (!email || !email.trim()) {
+    return { exists: false, available: true, message: 'Email address is required.' };
+  }
+
+  const authToken = token || localStorage.getItem('zetly-api-token');
+  const headers = {
+    'Accept': 'application/json',
+  };
+
+  if (authToken) {
+    headers['Authorization'] = `Bearer ${authToken}`;
+  }
+
+  const endpoint = authToken
+    ? `${API_BASE_URL}/clients/check-email?email=${encodeURIComponent(email.trim())}`
+    : `${API_BASE_URL}/dev/clients/check-email?email=${encodeURIComponent(email.trim())}`;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers,
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (response.ok) {
+      return data;
+    }
+    return {
+      exists: false,
+      available: true,
+      message: data.message || 'Unable to check email.',
+    };
+  } catch (err) {
+    console.warn('checkClientEmailExists request failed:', err.message);
+    return { exists: false, available: true, message: err.message };
+  }
+}

@@ -29,7 +29,7 @@ import AttachEmailRoundedIcon from '@mui/icons-material/AttachEmailRounded';
 import MarkEmailReadRoundedIcon from '@mui/icons-material/MarkEmailReadRounded';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import SmartphoneRoundedIcon from '@mui/icons-material/SmartphoneRounded';
-import { sendQrEmail, registerClientWithQr } from '../services/onboardingService';
+import { sendQrEmail, registerClientWithQr, checkClientCodeExists, checkClientEmailExists } from '../services/onboardingService';
 
 const insuranceProviders = [
   'AIA Singapore',
@@ -68,6 +68,10 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
   const [sendingEmail, setSendingEmail] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [registeredClientId, setRegisteredClientId] = useState(null);
+  const [clientCodeError, setClientCodeError] = useState('');
+  const [checkingCode, setCheckingCode] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [checkingEmail, setCheckingEmail] = useState(false);
 
   const showToast = (message, severity = 'success') => {
     setToastMessage(message);
@@ -75,10 +79,106 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
     setToastOpen(true);
   };
 
+  // Check if patient email is already registered in DB
+  const handlePatientEmailBlur = async () => {
+    const trimmed = patientEmail.trim();
+    if (!trimmed) {
+      setEmailError('');
+      return;
+    }
+    setCheckingEmail(true);
+    try {
+      const res = await checkClientEmailExists(trimmed);
+      if (res?.exists) {
+        setEmailError(res.message || `Email '${trimmed}' is already registered.`);
+      } else {
+        setEmailError('');
+      }
+    } catch (err) {
+      console.warn('checkClientEmailExists blur check error:', err);
+    } finally {
+      setCheckingEmail(false);
+    }
+  };
+
+  // Check if member code is already registered in DB
+  const handleClientCodeBlur = async () => {
+    const trimmed = clientCode.trim();
+    if (!trimmed) {
+      setClientCodeError('Member code is required.');
+      return;
+    }
+    setCheckingCode(true);
+    try {
+      const res = await checkClientCodeExists(trimmed);
+      if (res?.exists) {
+        setClientCodeError(res.message || `Member code '${trimmed}' is already registered.`);
+      } else {
+        setClientCodeError('');
+      }
+    } catch (err) {
+      console.warn('checkClientCodeExists blur check error:', err);
+    } finally {
+      setCheckingCode(false);
+    }
+  };
+
   // Handle Generate QR & Register Patient
   const handleGenerateQR = async (e) => {
     e.preventDefault();
     if (!fullName.trim()) return;
+
+    const trimmedCode = clientCode.trim();
+    if (!trimmedCode) {
+      setClientCodeError('Member code is required.');
+      showToast('Please enter a valid member code.', 'warning');
+      return;
+    }
+
+    if (clientCodeError) {
+      showToast(clientCodeError, 'error');
+      return;
+    }
+
+    if (emailError) {
+      showToast(emailError, 'error');
+      return;
+    }
+
+    const trimmedEmail = patientEmail.trim();
+
+    // Proactively verify uniqueness before proceeding
+    setCheckingCode(true);
+    if (trimmedEmail) setCheckingEmail(true);
+
+    try {
+      const checkRes = await checkClientCodeExists(trimmedCode);
+      if (checkRes?.exists) {
+        const errorMsg = checkRes.message || `Member code '${trimmedCode}' is already registered.`;
+        setClientCodeError(errorMsg);
+        showToast(errorMsg, 'error');
+        setCheckingCode(false);
+        if (trimmedEmail) setCheckingEmail(false);
+        return;
+      }
+
+      if (trimmedEmail) {
+        const checkEmailRes = await checkClientEmailExists(trimmedEmail);
+        if (checkEmailRes?.exists) {
+          const errorMsg = checkEmailRes.message || `Email '${trimmedEmail}' is already registered.`;
+          setEmailError(errorMsg);
+          showToast(errorMsg, 'error');
+          setCheckingCode(false);
+          setCheckingEmail(false);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Pre-registration check warning:', err.message);
+    } finally {
+      setCheckingCode(false);
+      setCheckingEmail(false);
+    }
 
     let targetUrl = '';
     let clientId = null;
@@ -87,7 +187,7 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
       // Call Laravel backend to register patient
       const res = await registerClientWithQr({
         full_name: fullName.trim(),
-        client_code: clientCode.trim(),
+        client_code: trimmedCode,
         email: patientEmail.trim() || null,
         date_of_birth: dob || null,
         gender: gender || null,
@@ -106,12 +206,26 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
         setRegisteredClientId(clientId);
       }
     } catch (err) {
+      const msg = err.message || '';
+      const isEmailDuplicate = /email/i.test(msg) && /already (been )?taken|already registered|exists|unique/i.test(msg);
+      const isCodeDuplicate = (/client code|client_code/i.test(msg) || !isEmailDuplicate) && /already (been )?taken|already registered|exists|unique/i.test(msg);
+
+      if (isEmailDuplicate) {
+        setEmailError(msg);
+        showToast(msg, 'error');
+        return;
+      }
+      if (isCodeDuplicate) {
+        setClientCodeError(msg);
+        showToast(msg, 'error');
+        return;
+      }
       console.warn('Backend registration notice (continuing with client QR):', err.message);
     }
 
     if (!targetUrl) {
       const generatedToken = `inv_${Math.random().toString(36).substring(2, 12)}_${Date.now().toString(36)}`;
-      targetUrl = `https://app.zetly.health/onboard?token=${generatedToken}&client=${encodeURIComponent(clientCode)}`;
+      targetUrl = `http://localhost:3000/onboard?token=${generatedToken}&client=${encodeURIComponent(trimmedCode)}`;
     }
 
     setOnboardUrl(targetUrl);
@@ -121,7 +235,7 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
 
     if (onPatientRegistered) {
       onPatientRegistered({
-        id: clientCode,
+        id: trimmedCode,
         requestId: `CLM-${Math.floor(2050 + Math.random() * 100)}`,
         patient: fullName,
         doctor: 'Dr. Rajesh Kumar',
@@ -252,6 +366,10 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
     setFullName('');
     setPatientEmail('');
     setClientCode(`ZT-${Math.floor(10500 + Math.random() * 400)}`);
+    setClientCodeError('');
+    setCheckingCode(false);
+    setEmailError('');
+    setCheckingEmail(false);
     setPatientStatus('pending_activation');
     setEmailSent(false);
     setRegisteredClientId(null);
@@ -308,7 +426,7 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
         <DialogContent sx={{ pt: 1.5 }}>
           {step === 1 ? (
             /* STEP 1: Registration Form */
-            <Box component="form" onSubmit={handleGenerateQR} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box component="form" onSubmit={handleGenerateQR} sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
               <Box sx={{ display: 'flex', gap: 2 }}>
                 <TextField
                   label="Patient Full Name"
@@ -326,7 +444,16 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
                   required
                   fullWidth
                   value={clientCode}
-                  onChange={(e) => setClientCode(e.target.value)}
+                  onChange={(e) => {
+                    setClientCode(e.target.value);
+                    if (clientCodeError) setClientCodeError('');
+                  }}
+                  onBlur={handleClientCodeBlur}
+                  error={Boolean(clientCodeError)}
+                  helperText={clientCodeError}
+                  InputProps={{
+                    endAdornment: checkingCode ? <CircularProgress size={16} sx={{ color: '#32998f' }} /> : null,
+                  }}
                   sx={{ flex: 1 }}
                 />
               </Box>
@@ -339,7 +466,16 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
                   size="small"
                   fullWidth
                   value={patientEmail}
-                  onChange={(e) => setPatientEmail(e.target.value)}
+                  onChange={(e) => {
+                    setPatientEmail(e.target.value);
+                    if (emailError) setEmailError('');
+                  }}
+                  onBlur={handlePatientEmailBlur}
+                  error={Boolean(emailError)}
+                  helperText={emailError || 'Must be unique per patient'}
+                  InputProps={{
+                    endAdornment: checkingEmail ? <CircularProgress size={16} sx={{ color: '#32998f' }} /> : null,
+                  }}
                   sx={{ flex: 1.2 }}
                 />
                 <TextField
@@ -662,8 +798,8 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
                     {sendingEmail
                       ? 'Sending via SMTP...'
                       : emailSent
-                      ? 'Resend QR Email'
-                      : 'Send QR via Email'}
+                        ? 'Resend QR Email'
+                        : 'Send QR via Email'}
                   </Button>
                 </Box>
 

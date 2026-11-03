@@ -77,7 +77,7 @@ const referralTableData = [
 const ReferralsPage = () => {
   const [copied, setCopied] = useState(false);
   const [toastOpen, setToastOpen] = useState(false);
-  const referralLink = 'https://app.zetly.health/ref/ABC01';
+  const referralLink = 'http://localhost:3000/ref/ABC01';
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(referralLink);

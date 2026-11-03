@@ -1,16 +1,8 @@
 import axios from 'axios';
 
 // Determine the base URL based on the environment
-let baseURL;
-export let baseURL2;
-
-if (process.env.NODE_ENV === 'development') {
-  baseURL = 'http://localhost:8000/api'; // Development baseURL
-  baseURL2 = 'http://localhost:8000'; // Development baseURL
-} else {
-  baseURL = 'https://zetly.com/api'; // Production baseURL
-  baseURL2 = 'https://zetly.com'; // Production baseURL
-}
+let baseURL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+export let baseURL2 = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
 
 const ApiClient = axios.create({
   baseURL: baseURL,
