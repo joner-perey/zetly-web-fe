@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -26,6 +26,7 @@ import {
 } from '@mui/material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import InboxRoundedIcon from '@mui/icons-material/InboxRounded';
+import QrCode2RoundedIcon from '@mui/icons-material/QrCode2Rounded';
 import MedicalServicesOutlinedIcon from '@mui/icons-material/MedicalServicesOutlined';
 import CampaignOutlinedIcon from '@mui/icons-material/CampaignOutlined';
 import SwapHorizRoundedIcon from '@mui/icons-material/SwapHorizRounded';
@@ -36,6 +37,7 @@ import UnfoldMoreRoundedIcon from '@mui/icons-material/UnfoldMoreRounded';
 import VisibilityRoundedIcon from '@mui/icons-material/VisibilityRounded';
 import VisibilityOffRoundedIcon from '@mui/icons-material/VisibilityOffRounded';
 import CloseRoundedIcon from '@mui/icons-material/CloseRounded';
+import { fetchIntakeQueue } from '../services/onboardingService';
 
 const menuItems = [
   {
@@ -43,7 +45,14 @@ const menuItems = [
     path: '/',
     label: 'Intake queue',
     icon: <InboxRoundedIcon fontSize="small" />,
-    count: 3,
+    count: null,
+  },
+  {
+    id: 'register-patient',
+    path: '/register-patient',
+    label: 'Register Patient (QR)',
+    icon: <QrCode2RoundedIcon fontSize="small" />,
+    count: null,
   },
   {
     id: 'panel',
@@ -96,6 +105,21 @@ const Sidebar = () => {
 
   // Toast notification state
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success' });
+  const [pendingIntakeCount, setPendingIntakeCount] = useState(0);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchIntakeQueue({ status: 'Pending' })
+      .then((data) => {
+        if (isMounted && Array.isArray(data)) {
+          setPendingIntakeCount(data.length);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [location.pathname]);
 
   const handleOpenMenu = (event) => {
     setAnchorEl(event.currentTarget);
@@ -199,7 +223,9 @@ const Sidebar = () => {
           const isActive =
             item.id === 'intake-queue'
               ? location.pathname === '/' || location.pathname === '/intake-queue'
-              : location.pathname.startsWith(item.path);
+              : item.id === 'register-patient'
+                ? location.pathname.startsWith('/register-patient') || location.pathname.startsWith('/patients')
+                : location.pathname.startsWith(item.path);
 
           return (
             <ListItem key={item.id} disablePadding>
@@ -236,9 +262,9 @@ const Sidebar = () => {
                     fontWeight: isActive ? 600 : 500,
                   }}
                 />
-                {item.count !== null && (
+                {(item.id === 'intake-queue' ? (pendingIntakeCount > 0 ? pendingIntakeCount : null) : item.count) !== null && (
                   <Chip
-                    label={item.count}
+                    label={item.id === 'intake-queue' ? pendingIntakeCount : item.count}
                     size="small"
                     sx={{
                       height: 20,

@@ -39,22 +39,23 @@ const insuranceProviders = [
   'Income Insurance',
   'Cigna Healthcare',
   'Bupa Global',
+  'Bupa Singapore',
 ];
 
-const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
+const RegisterPatientModal = ({ open, onClose, onPatientRegistered, closeOnGenerate = true }) => {
   const [step, setStep] = useState(1); // 1 = Form, 2 = QR Code Screen
 
-  // Form Fields
+  // Form Fields (starts clean with no dummy data)
   const [fullName, setFullName] = useState('');
   const [patientEmail, setPatientEmail] = useState('');
   const [clientCode, setClientCode] = useState(`ZT-${Math.floor(10500 + Math.random() * 400)}`);
-  const [dob, setDob] = useState('1992-06-15');
-  const [gender, setGender] = useState('Female');
+  const [dob, setDob] = useState('');
+  const [gender, setGender] = useState('Male');
   const [insurance, setInsurance] = useState('AIA Singapore');
-  const [policyNumber, setPolicyNumber] = useState('POL-9921-X');
-  const [planType, setPlanType] = useState('Corporate Comprehensive');
+  const [policyNumber, setPolicyNumber] = useState('');
+  const [planType, setPlanType] = useState('');
   const [cashless, setCashless] = useState(true);
-  const [contactNumber, setContactNumber] = useState('+65 9123 4567');
+  const [contactNumber, setContactNumber] = useState('');
 
   // Generated QR details
   const [onboardUrl, setOnboardUrl] = useState('');
@@ -123,6 +124,29 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
     }
   };
 
+  // Reset Modal
+  const handleReset = () => {
+    setStep(1);
+    setFullName('');
+    setPatientEmail('');
+    setClientCode(`ZT-${Math.floor(10500 + Math.random() * 400)}`);
+    setDob('');
+    setGender('Male');
+    setInsurance('AIA Singapore');
+    setPolicyNumber('');
+    setPlanType('');
+    setCashless(true);
+    setContactNumber('');
+    setClientCodeError('');
+    setCheckingCode(false);
+    setEmailError('');
+    setCheckingEmail(false);
+    setPatientStatus('pending_activation');
+    setEmailSent(false);
+    setRegisteredClientId(null);
+    onClose();
+  };
+
   // Handle Generate QR & Register Patient
   const handleGenerateQR = async (e) => {
     e.preventDefault();
@@ -180,74 +204,70 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
       setCheckingEmail(false);
     }
 
-    let targetUrl = '';
-    let clientId = null;
-
     try {
-      // Call Laravel backend to register patient
       const res = await registerClientWithQr({
         full_name: fullName.trim(),
         client_code: trimmedCode,
-        email: patientEmail.trim() || null,
+        email: trimmedEmail || null,
         date_of_birth: dob || null,
         gender: gender || null,
         insurance_provider: insurance || null,
-        insurance_id: policyNumber || null,
-        plan_type: planType || null,
-        contact_number: contactNumber || null,
+        insurance_id: policyNumber.trim() || null,
+        plan_type: planType.trim() || null,
+        contact_number: contactNumber.trim() || null,
         cashless_eligible: cashless,
       });
 
-      if (res?.onboard_url) {
-        targetUrl = res.onboard_url;
-      }
-      if (res?.client?.id) {
-        clientId = res.client.id;
+      const targetUrl = res?.onboard_url;
+      const backendToken = res?.token;
+      const clientId = res?.client?.id;
+
+      if (clientId) {
         setRegisteredClientId(clientId);
       }
+
+      const newPatientRecord = {
+        id: clientId,
+        client_code: trimmedCode,
+        full_name: fullName.trim(),
+        email: trimmedEmail || '',
+        contact_number: contactNumber.trim() || '',
+        date_of_birth: dob || '',
+        gender: gender || 'Male',
+        insurance_provider: insurance || 'AIA Singapore',
+        insurance_id: policyNumber.trim() || 'N/A',
+        plan_type: planType.trim() || 'Standard Plan',
+        cashless_eligible: cashless,
+        onboarding_status: 'pending_activation',
+        onboarding_token: backendToken,
+        onboard_url: targetUrl,
+        created_at: new Date().toISOString().slice(0, 16).replace('T', ' '),
+      };
+
+      if (onPatientRegistered) {
+        onPatientRegistered(newPatientRecord);
+      }
+
+      if (closeOnGenerate) {
+        handleReset();
+        return;
+      }
+
+      setOnboardUrl(targetUrl);
+      setPatientStatus('pending_activation');
+      setEmailSent(false);
+      setStep(2);
     } catch (err) {
-      const msg = err.message || '';
+      const msg = err.message || 'Registration failed.';
       const isEmailDuplicate = /email/i.test(msg) && /already (been )?taken|already registered|exists|unique/i.test(msg);
       const isCodeDuplicate = (/client code|client_code/i.test(msg) || !isEmailDuplicate) && /already (been )?taken|already registered|exists|unique/i.test(msg);
 
       if (isEmailDuplicate) {
         setEmailError(msg);
-        showToast(msg, 'error');
-        return;
-      }
-      if (isCodeDuplicate) {
+      } else if (isCodeDuplicate) {
         setClientCodeError(msg);
-        showToast(msg, 'error');
-        return;
       }
-      console.warn('Backend registration notice (continuing with client QR):', err.message);
-    }
-
-    if (!targetUrl) {
-      const generatedToken = `inv_${Math.random().toString(36).substring(2, 12)}_${Date.now().toString(36)}`;
-      targetUrl = `http://localhost:3000/onboard?token=${generatedToken}&client=${encodeURIComponent(trimmedCode)}`;
-    }
-
-    setOnboardUrl(targetUrl);
-    setPatientStatus('pending_activation');
-    setEmailSent(false);
-    setStep(2);
-
-    if (onPatientRegistered) {
-      onPatientRegistered({
-        id: trimmedCode,
-        requestId: `CLM-${Math.floor(2050 + Math.random() * 100)}`,
-        patient: fullName,
-        doctor: 'Dr. Rajesh Kumar',
-        clinic: 'Orchard Family Clinic',
-        specialty: 'GP',
-        visitDate: 'Scheduled via App',
-        visitTime: 'Pending booking',
-        cover: cashless ? 'Cashless treatment' : 'Discounted consultation',
-        received: 'Just now',
-        status: 'Awaiting review',
-        filterCategory: 'Pending',
-      });
+      showToast(msg, 'error');
     }
   };
 
@@ -261,7 +281,7 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
 
   // Render High-Res Canvas with QR and branding
   const generateQrCardCanvas = (callback) => {
-    const svgElement = document.getElementById('patient-qr-svg');
+    const svgElement = document.getElementById('modal-patient-qr-svg');
     if (!svgElement) return;
 
     const svgData = new XMLSerializer().serializeToString(svgElement);
@@ -318,7 +338,7 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
     });
   };
 
-  // Send QR Email directly via Laravel Backend + SMTP (No Microsoft Graph API)
+  // Send QR Email directly via Laravel Backend + SMTP
   const handleSendEmail = () => {
     if (!patientEmail || !patientEmail.trim()) {
       showToast('Please enter the patient’s email address.', 'warning');
@@ -352,28 +372,6 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
         setSendingEmail(false);
       }
     });
-  };
-
-  // Simulate Patient Scan & Password Setup
-  const handleSimulateScan = () => {
-    setPatientStatus('activated');
-    showToast(`Success! ${fullName} scanned QR and activated account.`);
-  };
-
-  // Reset Modal
-  const handleReset = () => {
-    setStep(1);
-    setFullName('');
-    setPatientEmail('');
-    setClientCode(`ZT-${Math.floor(10500 + Math.random() * 400)}`);
-    setClientCodeError('');
-    setCheckingCode(false);
-    setEmailError('');
-    setCheckingEmail(false);
-    setPatientStatus('pending_activation');
-    setEmailSent(false);
-    setRegisteredClientId(null);
-    onClose();
   };
 
   return (
@@ -430,7 +428,7 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
               <Box sx={{ display: 'flex', gap: 2 }}>
                 <TextField
                   label="Patient Full Name"
-                  placeholder="e.g. Elena Ong"
+                  placeholder="Enter full name"
                   size="small"
                   required
                   fullWidth
@@ -461,7 +459,7 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
               <Box sx={{ display: 'flex', gap: 2 }}>
                 <TextField
                   label="Patient Email Address"
-                  placeholder="e.g. elena.ong@example.com"
+                  placeholder="patient@example.com"
                   type="email"
                   size="small"
                   fullWidth
@@ -480,6 +478,7 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
                 />
                 <TextField
                   label="Patient Contact (Mobile)"
+                  placeholder="+65 ..."
                   size="small"
                   fullWidth
                   value={contactNumber}
@@ -506,9 +505,8 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
                   value={gender}
                   onChange={(e) => setGender(e.target.value)}
                 >
-                  <MenuItem value="Female">Female</MenuItem>
                   <MenuItem value="Male">Male</MenuItem>
-                  <MenuItem value="Other">Other</MenuItem>
+                  <MenuItem value="Female">Female</MenuItem>
                 </TextField>
               </Box>
 
@@ -532,6 +530,7 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
                 </TextField>
                 <TextField
                   label="Policy / Certificate #"
+                  placeholder="e.g. POL-12345"
                   size="small"
                   fullWidth
                   value={policyNumber}
@@ -543,6 +542,7 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
               <Box sx={{ display: 'flex', gap: 2 }}>
                 <TextField
                   label="Plan Coverage"
+                  placeholder="e.g. Corporate Comprehensive"
                   size="small"
                   fullWidth
                   value={planType}
@@ -606,7 +606,6 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
           ) : (
             /* STEP 2: QR Code Presentation Screen */
             <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', py: 1 }}>
-              {/* Status Banner */}
               <Box sx={{ width: '100%', mb: 2 }}>
                 {patientStatus === 'activated' ? (
                   <Alert severity="success" sx={{ borderRadius: 2 }}>
@@ -619,7 +618,6 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
                 )}
               </Box>
 
-              {/* QR Code Container */}
               <Paper
                 elevation={2}
                 sx={{
@@ -635,7 +633,7 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
                 }}
               >
                 <QRCodeSVG
-                  id="patient-qr-svg"
+                  id="modal-patient-qr-svg"
                   value={onboardUrl}
                   size={190}
                   level="H"
@@ -651,7 +649,6 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
                 </Box>
               </Paper>
 
-              {/* Activation Status Badge */}
               <Box sx={{ mb: 2 }}>
                 {patientStatus === 'activated' ? (
                   <Chip
@@ -675,7 +672,6 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
                 )}
               </Box>
 
-              {/* Copy URL & Action bar */}
               <Paper
                 variant="outlined"
                 sx={{
@@ -719,11 +715,10 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
                 </Button>
               </Paper>
 
-              {/* Recipient Email Confirmation & Quick Edit */}
               <Box sx={{ width: '100%', mb: 2 }}>
                 <TextField
                   label="Patient Recipient Email"
-                  placeholder="e.g. patient@example.com"
+                  placeholder="patient@example.com"
                   type="email"
                   size="small"
                   fullWidth
@@ -733,7 +728,6 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
                 />
               </Box>
 
-              {/* Email Sent Status Banner */}
               {emailSent && (
                 <Alert
                   severity="success"
@@ -744,10 +738,8 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
                 </Alert>
               )}
 
-              {/* Action Buttons */}
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, width: '100%' }}>
                 <Box sx={{ display: 'flex', gap: 1.5, width: '100%' }}>
-                  {/* Save as Image */}
                   <Button
                     fullWidth
                     variant="outlined"
@@ -769,7 +761,6 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
                     Save as Image
                   </Button>
 
-                  {/* Send QR Email via Laravel SMTP */}
                   <Button
                     fullWidth
                     variant="contained"
@@ -814,38 +805,6 @@ const RegisterPatientModal = ({ open, onClose, onPatientRegistered }) => {
                 >
                   Directly sends the welcome email with the attached QR code to the patient via Laravel SMTP (no Microsoft login required).
                 </Typography>
-
-                {patientStatus !== 'activated' ? (
-                  <Button
-                    fullWidth
-                    variant="text"
-                    onClick={handleSimulateScan}
-                    sx={{
-                      textTransform: 'none',
-                      fontSize: '0.8125rem',
-                      color: '#2563eb',
-                      py: 0.5,
-                    }}
-                  >
-                    Simulate App Scan (Test)
-                  </Button>
-                ) : (
-                  <Button
-                    fullWidth
-                    variant="contained"
-                    onClick={handleReset}
-                    sx={{
-                      bgcolor: '#059669',
-                      '&:hover': { bgcolor: '#047857' },
-                      textTransform: 'none',
-                      fontWeight: 600,
-                      borderRadius: 2,
-                      py: 1,
-                    }}
-                  >
-                    Done
-                  </Button>
-                )}
               </Box>
             </Box>
           )}
