@@ -424,3 +424,277 @@ export async function deletePanelDoctor(doctorId, token) {
   return data;
 }
 
+/**
+ * Fetch all content / health tips (Supports status query: 'all', 'published', 'draft').
+ */
+export async function fetchContents(status = 'all') {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  const { response, data } = await requestWithFallback(`/contents${query}`, {
+    method: 'GET',
+  });
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to load content feed.');
+  }
+
+  return Array.isArray(data) ? data : data.data || [];
+}
+
+/**
+ * Update content (e.g. publish draft or update details).
+ */
+export async function updateContent(contentId, payload, token) {
+  const { response, data } = await requestWithFallback(
+    `/contents/${contentId}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    },
+    token
+  );
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to update content.');
+  }
+
+  return data;
+}
+
+/**
+ * Publish a new health tip / article (supports FormData for image upload).
+ */
+export async function publishContent(formDataOrPayload, token) {
+  const authToken = token || localStorage.getItem('zetly-api-token');
+  const isFormData = typeof FormData !== 'undefined' && formDataOrPayload instanceof FormData;
+
+  const headers = {
+    Accept: 'application/json',
+  };
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+
+  const primaryEndpoint = `${API_BASE_URL}/contents`;
+  const fallbackEndpoint = `${API_BASE_URL}/dev/contents`;
+
+  const body = isFormData ? formDataOrPayload : JSON.stringify(formDataOrPayload);
+
+  let response = await fetch(primaryEndpoint, {
+    method: 'POST',
+    headers,
+    body,
+  });
+
+  if (response.status === 401 || response.status === 403 || response.status === 404) {
+    const fallbackHeaders = { Accept: 'application/json' };
+    if (!isFormData) fallbackHeaders['Content-Type'] = 'application/json';
+    response = await fetch(fallbackEndpoint, {
+      method: 'POST',
+      headers: fallbackHeaders,
+      body,
+    });
+  }
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    let errMsg = data.message;
+    if (data.errors) {
+      errMsg = Object.values(data.errors).flat().join('. ');
+    }
+    throw new Error(errMsg || 'Failed to publish content.');
+  }
+
+  return data;
+}
+
+/**
+ * Delete a content item.
+ */
+export async function deleteContent(contentId, token) {
+  const { response, data } = await requestWithFallback(
+    `/contents/${contentId}`,
+    { method: 'DELETE' },
+    token
+  );
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to delete content.');
+  }
+
+  return data;
+}
+
+/**
+ * Fetch all referrals (supports status filter).
+ */
+export async function fetchReferrals(status = 'all') {
+  const query = status && status !== 'all' ? `?status=${encodeURIComponent(status)}` : '';
+  const { response, data } = await requestWithFallback(`/referrals${query}`, {
+    method: 'GET',
+  });
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to load referrals.');
+  }
+
+  return Array.isArray(data) ? data : data.data || [];
+}
+
+/**
+ * Fetch referral stats (funnel counts, pending amount, referral links).
+ */
+export async function fetchReferralStats() {
+  const { response, data } = await requestWithFallback('/referrals/stats', {
+    method: 'GET',
+  });
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to load referral stats.');
+  }
+
+  return data;
+}
+
+/**
+ * Create a new referral from popup dialog.
+ */
+export async function createReferral(payload, token) {
+  const { response, data } = await requestWithFallback(
+    '/referrals',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+    token
+  );
+
+  if (!response.ok) {
+    let errMsg = data.message;
+    if (data.errors) {
+      errMsg = Object.values(data.errors).flat().join('. ');
+    }
+    throw new Error(errMsg || 'Failed to create referral.');
+  }
+
+  return data;
+}
+
+/**
+ * Admin manually updates a referral's status.
+ */
+export async function updateReferralStatus(referralId, status, token) {
+  const { response, data } = await requestWithFallback(
+    `/referrals/${referralId}/status`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    },
+    token
+  );
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to update referral status.');
+  }
+
+  return data;
+}
+
+/**
+ * Delete a referral record.
+ */
+export async function deleteReferral(referralId, token) {
+  const { response, data } = await requestWithFallback(
+    `/referrals/${referralId}`,
+    { method: 'DELETE' },
+    token
+  );
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to delete referral.');
+  }
+
+  return data;
+}
+
+/**
+ * Resolve a referral link code (returns assigned doctor/clinic info).
+ */
+export async function resolveReferralLink(code) {
+  const { response, data } = await requestWithFallback(`/referral-links/${encodeURIComponent(code)}`, {
+    method: 'GET',
+  });
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Invalid referral link.');
+  }
+
+  return data;
+}
+
+/**
+ * Create a new referral link in the referral_links table.
+ */
+export async function createReferralLink(payload, token) {
+  const { response, data } = await requestWithFallback(
+    '/referral-links',
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    },
+    token
+  );
+
+  if (!response.ok) {
+    let errMsg = data.message;
+    if (data.errors) {
+      errMsg = Object.values(data.errors).flat().join('. ');
+    }
+    throw new Error(errMsg || 'Failed to create referral link.');
+  }
+
+  return data;
+}
+
+/**
+ * Delete a referral link.
+ */
+export async function deleteReferralLink(id, token) {
+  const { response, data } = await requestWithFallback(
+    `/referral-links/${id}`,
+    { method: 'DELETE' },
+    token
+  );
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to delete referral link.');
+  }
+
+  return data;
+}
+
+// Aliases for Referral Code terminology
+export const createReferralCode = createReferralLink;
+export const deleteReferralCode = deleteReferralLink;
+
+/**
+ * Validate a referral code against the backend API.
+ */
+export async function validateReferralCode(code) {
+  const { response, data } = await requestWithFallback(
+    `/referrals/validate-code/${encodeURIComponent(code.trim().toUpperCase())}`,
+    { method: 'GET' }
+  );
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Invalid referral code.');
+  }
+
+  return data;
+}
+
+
+

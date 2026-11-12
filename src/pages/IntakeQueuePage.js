@@ -15,7 +15,6 @@ import {
   Button,
   ButtonGroup,
   Avatar,
-  Divider,
   Stack,
   Snackbar,
   Alert,
@@ -27,9 +26,6 @@ import SearchRoundedIcon from '@mui/icons-material/SearchRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined';
 import AccessTimeFilledRoundedIcon from '@mui/icons-material/AccessTimeFilledRounded';
-import MedicalServicesOutlinedIcon from '@mui/icons-material/MedicalServicesOutlined';
-import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined';
-import SecurityOutlinedIcon from '@mui/icons-material/SecurityOutlined';
 import SmartphoneRoundedIcon from '@mui/icons-material/SmartphoneRounded';
 import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import Sidebar from '../components/Sidebar';
@@ -198,8 +194,6 @@ const IntakeQueuePage = () => {
       });
     }
   };
-
-  const selectedStatusChip = getStatusChipProps(selectedItem?.status);
 
   return (
     <Box
@@ -538,7 +532,7 @@ const IntakeQueuePage = () => {
                             <Chip
                               size="small"
                               icon={chipProps.icon}
-                              label={row.status}
+                              label={row.status === 'Verified' ? 'Sent to clinic' : row.status}
                               sx={chipProps.sx}
                             />
                           </TableCell>
@@ -563,15 +557,18 @@ const IntakeQueuePage = () => {
             </TableContainer>
           </Paper>
 
-          {/* Detail Section */}
+          {/* Detail Section (Matches reference design) */}
           <Paper
             elevation={1}
             sx={{
               flex: 1,
               minWidth: 320,
-              borderRadius: 2,
+              maxWidth: 400,
+              borderRadius: 2.5,
               p: 3,
-              bgcolor: 'background.paper',
+              bgcolor: '#ffffff',
+              border: '1px solid #e2e8f0',
+              boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
               display: 'flex',
               flexDirection: 'column',
             }}
@@ -579,28 +576,27 @@ const IntakeQueuePage = () => {
             {selectedItem ? (
               <>
                 {/* Detail Header */}
-                <Box sx={{ mb: 2 }}>
-                  <Chip
-                    label={`REQUEST ${selectedItem.requestId}`}
-                    size="small"
+                <Box sx={{ mb: 2.5 }}>
+                  <Typography
                     sx={{
-                      bgcolor: '#f1f5f9',
-                      color: '#475569',
-                      fontWeight: 700,
-                      fontSize: '0.7rem',
-                      letterSpacing: '0.04em',
-                      mb: 1.25,
-                      borderRadius: 1,
-                      border: '1px solid #e2e8f0',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      letterSpacing: '0.05em',
+                      textTransform: 'uppercase',
+                      color: '#64748b',
+                      mb: 0.75,
                     }}
-                  />
+                  >
+                    REQUEST {selectedItem.requestId}
+                  </Typography>
                   <Typography
                     variant="h6"
                     component="h2"
                     sx={{
                       fontWeight: 700,
-                      color: 'text.primary',
-                      lineHeight: 1.2,
+                      fontSize: '1.25rem',
+                      color: '#0f172a',
+                      lineHeight: 1.25,
                     }}
                   >
                     {selectedItem.patient}
@@ -608,8 +604,9 @@ const IntakeQueuePage = () => {
                   <Typography
                     variant="body2"
                     sx={{
-                      color: 'text.secondary',
-                      fontWeight: 500,
+                      color: '#64748b',
+                      fontSize: '0.875rem',
+                      fontWeight: 400,
                       mt: 0.25,
                     }}
                   >
@@ -617,174 +614,279 @@ const IntakeQueuePage = () => {
                   </Typography>
                 </Box>
 
-                <Divider sx={{ my: 1.5 }} />
-
-                {/* Detail Body */}
-                <Stack spacing={2} sx={{ mb: 3 }}>
-                  <Box>
+                {/* Detail Body: 2-Column Key/Value Layout */}
+                <Stack spacing={1.5} sx={{ mb: 2.25 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      gap: 2,
+                    }}
+                  >
+                    <Typography sx={{ fontSize: '0.875rem', color: '#64748b', flexShrink: 0 }}>
+                      Doctor
+                    </Typography>
                     <Typography
-                      variant="caption"
                       sx={{
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        color: 'text.secondary',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 0.5,
-                        mb: 0.5,
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        color: '#0f172a',
+                        textAlign: 'right',
+                        lineHeight: 1.4,
                       }}
                     >
-                      <MedicalServicesOutlinedIcon sx={{ fontSize: 15 }} /> Doctor & Clinic
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
                       {selectedItem.doctor} · {selectedItem.clinic}
                     </Typography>
                   </Box>
 
-                  <Box>
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        color: 'text.secondary',
-                        display: 'block',
-                        mb: 0.5,
-                      }}
-                    >
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      gap: 2,
+                    }}
+                  >
+                    <Typography sx={{ fontSize: '0.875rem', color: '#64748b', flexShrink: 0 }}>
                       Specialty
                     </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                    <Typography
+                      sx={{
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        color: '#0f172a',
+                        textAlign: 'right',
+                      }}
+                    >
                       {selectedItem.specialty}
                     </Typography>
                   </Box>
 
-                  <Box>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      gap: 2,
+                    }}
+                  >
+                    <Typography sx={{ fontSize: '0.875rem', color: '#64748b', flexShrink: 0 }}>
+                      Visit
+                    </Typography>
                     <Typography
-                      variant="caption"
                       sx={{
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        color: 'text.secondary',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 0.5,
-                        mb: 0.5,
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        color: '#0f172a',
+                        textAlign: 'right',
                       }}
                     >
-                      <EventAvailableOutlinedIcon sx={{ fontSize: 15 }} /> Visit Schedule
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
                       {selectedItem.visitDate} · {selectedItem.visitTime}
                     </Typography>
                   </Box>
 
-                  <Box>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      gap: 2,
+                    }}
+                  >
+                    <Typography sx={{ fontSize: '0.875rem', color: '#64748b', flexShrink: 0 }}>
+                      Cover
+                    </Typography>
                     <Typography
-                      variant="caption"
                       sx={{
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        color: 'text.secondary',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 0.5,
-                        mb: 0.5,
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        color: '#0f172a',
+                        textAlign: 'right',
                       }}
                     >
-                      <SecurityOutlinedIcon sx={{ fontSize: 15 }} /> Cover Plan
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                      {selectedItem.cover}
+                      {(selectedItem.cover || '').toLowerCase().includes('discount')
+                        ? 'Discounted consultation'
+                        : selectedItem.cover}
                     </Typography>
                   </Box>
 
-                  <Box>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      gap: 2,
+                    }}
+                  >
+                    <Typography sx={{ fontSize: '0.875rem', color: '#64748b', flexShrink: 0 }}>
+                      Received
+                    </Typography>
                     <Typography
-                      variant="caption"
                       sx={{
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                        color: 'text.secondary',
-                        display: 'block',
-                        mb: 0.5,
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        color: '#0f172a',
+                        textAlign: 'right',
                       }}
                     >
-                      Received Timestamp
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 500, color: 'text.secondary' }}>
                       {selectedItem.received}
                     </Typography>
                   </Box>
-
-                  <Box sx={{ pt: 0.5 }}>
-                    <Chip
-                      size="small"
-                      icon={selectedStatusChip.icon}
-                      label={selectedItem.status}
-                      sx={selectedStatusChip.sx}
-                    />
-                  </Box>
                 </Stack>
 
-                {/* Action Buttons */}
-                <Stack spacing={1.5} sx={{ mt: 'auto', pt: 2 }}>
-                  <Button
-                    variant="contained"
-                    color="success"
-                    fullWidth
-                    size="large"
-                    startIcon={<CheckCircleRoundedIcon />}
-                    onClick={handleSendToClinic}
-                    disabled={selectedItem.status === 'Verified'}
+                {/* Status Pill */}
+                <Box sx={{ mb: 2 }}>
+                  {selectedItem.status === 'Verified' || selectedItem.status === 'Sent to clinic' ? (
+                    <Box
+                      component="span"
+                      sx={{
+                        display: 'inline-block',
+                        px: 1.5,
+                        py: 0.4,
+                        borderRadius: '999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        bgcolor: '#ecfdf5',
+                        color: '#047857',
+                        border: '1px solid #6ee7b7',
+                      }}
+                    >
+                      Sent to clinic
+                    </Box>
+                  ) : selectedItem.status === 'Declined' ? (
+                    <Box
+                      component="span"
+                      sx={{
+                        display: 'inline-block',
+                        px: 1.5,
+                        py: 0.4,
+                        borderRadius: '999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        bgcolor: '#fef2f2',
+                        color: '#b91c1c',
+                        border: '1px solid #fecaca',
+                      }}
+                    >
+                      Declined
+                    </Box>
+                  ) : (
+                    <Box
+                      component="span"
+                      sx={{
+                        display: 'inline-block',
+                        px: 1.5,
+                        py: 0.4,
+                        borderRadius: '999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        bgcolor: '#fefce8',
+                        color: '#92400e',
+                        border: '1px solid #fde68a',
+                      }}
+                    >
+                      Awaiting review
+                    </Box>
+                  )}
+                </Box>
+
+                {/* Post-Action Notification Banner OR Action Buttons */}
+                {selectedItem.status === 'Verified' || selectedItem.status === 'Sent to clinic' ? (
+                  <Box
                     sx={{
-                      py: 1.2,
-                      fontWeight: 600,
-                      fontSize: '0.875rem',
-                      textTransform: 'none',
-                      bgcolor: '#0f766e',
-                      boxShadow: '0 2px 4px rgba(15, 118, 110, 0.25)',
-                      '&:hover': {
-                        bgcolor: '#0d5f58',
-                        boxShadow: '0 4px 6px rgba(15, 118, 110, 0.35)',
-                      },
+                      p: 1.75,
+                      px: 2,
+                      borderRadius: '10px',
+                      bgcolor: '#e6f7f2',
                     }}
                   >
-                    {selectedItem.status === 'Verified'
-                      ? 'Sent to clinic'
-                      : (selectedItem.cover || '').toLowerCase().includes('cashless')
+                    <Typography
+                      sx={{
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        color: '#065f46',
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {(selectedItem.cover || '').toLowerCase().includes('cashless')
+                        ? 'Clinic notified. Cashless eligibility confirmed — no consult fee at the counter.'
+                        : 'Clinic notified. Member pays the discounted consultation at the counter.'}
+                    </Typography>
+                  </Box>
+                ) : selectedItem.status === 'Declined' ? (
+                  <Box
+                    sx={{
+                      p: 1.75,
+                      px: 2,
+                      borderRadius: '10px',
+                      bgcolor: '#fef2f2',
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                        color: '#991b1b',
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      Request declined. Member has been notified.
+                    </Typography>
+                  </Box>
+                ) : (
+                  <Stack spacing={1.25} sx={{ pt: 0.5 }}>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      fullWidth
+                      size="large"
+                      startIcon={<CheckCircleRoundedIcon />}
+                      onClick={handleSendToClinic}
+                      sx={{
+                        py: 1.15,
+                        borderRadius: '10px',
+                        fontWeight: 600,
+                        fontSize: '0.875rem',
+                        textTransform: 'none',
+                        bgcolor: '#0d9488',
+                        boxShadow: 'none',
+                        '&:hover': {
+                          bgcolor: '#0f766e',
+                          boxShadow: 'none',
+                        },
+                      }}
+                    >
+                      {(selectedItem.cover || '').toLowerCase().includes('cashless')
                         ? 'Verify cashless & send to clinic'
                         : 'Send to clinic'}
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    fullWidth
-                    size="large"
-                    startIcon={<CancelOutlinedIcon />}
-                    onClick={handleDecline}
-                    disabled={selectedItem.status === 'Declined'}
-                    sx={{
-                      py: 1.2,
-                      fontWeight: 600,
-                      fontSize: '0.875rem',
-                      bgcolor: '#ffffff',
-                      borderColor: '#fca5a5',
-                      color: '#dc2626',
-                      '&:hover': {
-                        bgcolor: '#fef2f2',
-                        borderColor: '#ef4444',
-                      },
-                    }}
-                  >
-                    {selectedItem.status === 'Declined' ? 'Declined' : 'Decline'}
-                  </Button>
-                </Stack>
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      fullWidth
+                      size="large"
+                      startIcon={<CancelOutlinedIcon />}
+                      onClick={handleDecline}
+                      sx={{
+                        py: 1.15,
+                        borderRadius: '10px',
+                        fontWeight: 600,
+                        fontSize: '0.875rem',
+                        textTransform: 'none',
+                        bgcolor: '#ffffff',
+                        borderColor: '#f3d2d2',
+                        color: '#b91c1c',
+                        '&:hover': {
+                          bgcolor: '#fef2f2',
+                          borderColor: '#fca5a5',
+                        },
+                      }}
+                    >
+                      Decline
+                    </Button>
+                  </Stack>
+                )}
               </>
             ) : (
               <Box sx={{ py: 6, textAlign: 'center' }}>

@@ -7,6 +7,7 @@ import IntakeQueuePage from './pages/IntakeQueuePage';
 import RegisterPatientPage from './pages/RegisterPatientPage';
 import PanelPage from './pages/PanelPage';
 import ReferralsPage from './pages/ReferralsPage';
+import ReferralRedirectPage from './pages/ReferralRedirectPage';
 import ContentPage from './pages/ContentPage';
 import './App.css';
 
@@ -23,6 +24,7 @@ function App() {
             <Route path="/patients" element={<RegisterPatientPage />} />
             <Route path="/panel" element={<PanelPage />} />
             <Route path="/referrals" element={<ReferralsPage />} />
+            <Route path="/ref/:code" element={<ReferralRedirectPage />} />
             <Route path="/content" element={<ContentPage />} />
           </Routes>
         </div>

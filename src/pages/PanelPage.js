@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -66,6 +67,8 @@ const specialtyOptions = [
 const filterCategories = ['All', 'General Practice', 'Aesthetics', 'Dental Surgery', 'Orthopaedics'];
 
 const PanelPage = () => {
+  const [searchParams] = useSearchParams();
+  const urlDoctorId = searchParams.get('doctorId');
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
@@ -157,9 +160,9 @@ const PanelPage = () => {
       setDoctors(list);
 
       setSelectedDoctor((prev) => {
-        const targetId = preserveId || prev?.id;
+        const targetId = urlDoctorId ? Number(urlDoctorId) : (preserveId || prev?.id);
         if (targetId) {
-          const match = list.find((d) => d.id === targetId);
+          const match = list.find((d) => Number(d.id) === Number(targetId));
           if (match) return match;
         }
         return list[0] || null;
@@ -170,7 +173,7 @@ const PanelPage = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [urlDoctorId]);
 
   useEffect(() => {
     loadDoctors();
